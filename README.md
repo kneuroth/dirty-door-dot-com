@@ -1,159 +1,95 @@
-# Turborepo starter
+# dirtydoor.com
 
-This Turborepo starter is maintained by the Turborepo core team.
+Monorepo for **dirtydoor.com** — THE place to shame companies for their dirty doors.
 
-## Using this example
+## Stack
 
-Run the following command:
+- **Monorepo**: pnpm workspaces + Turborepo
+- **App**: Next.js 16 (App Router) — frontend + API in one app (`apps/web`)
+- **UI**: Tailwind CSS v4 + shadcn/ui
+- **DB**: Postgres on [Neon](https://neon.tech) via Drizzle ORM
+- **Validation**: Zod (derived from the Drizzle schema via `drizzle-zod`)
+- **Hosting**: Vercel
+- **Image storage (future)**: Vercel Blob
 
-```sh
-npx create-turbo@latest
+## Layout
+
+```
+apps/
+└── web/                # Next.js app — UI + /api/* routes
+packages/
+├── db/                 # Drizzle schema, Zod schemas, Postgres client
+├── eslint-config/      # shared ESLint config
+└── typescript-config/  # shared TS config
 ```
 
-## What's inside?
+## Environments
 
-This Turborepo includes the following packages/apps:
+Three tiers, all using the same Postgres engine so dev truly mirrors prod:
 
-### Apps and Packages
+| Tier       | Where                        | Database         |
+| ---------- | ---------------------------- | ---------------- |
+| Local      | `pnpm dev` on your machine   | Neon dev branch  |
+| Preview    | Vercel preview URL (per PR)  | Neon dev branch  |
+| Production | Vercel production deployment | Neon main branch |
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+## Run it locally
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+Prerequisites: Node 18+, pnpm 9+, a Neon project with a `dev` branch.
 
-### Utilities
+```bash
+# 1. Install deps
+pnpm install
 
-This Turborepo has some additional tools already setup for you:
+# 2. Set DATABASE_URL in both places (one for the runtime client, one for drizzle-kit)
+cp apps/web/.env.example apps/web/.env.local
+cp packages/db/.env.example packages/db/.env
+# Paste your Neon dev-branch connection string into both files.
 
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
+# 3. Sync the schema to your Neon dev branch
+pnpm --filter @repo/db db:push
 
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo build
+# 4. Run the app
+pnpm dev
+# → http://localhost:3000
 ```
 
-Without global `turbo`, use your package manager:
+Try the API:
 
-```sh
-cd my-turborepo
-npx turbo build
-pnpm dlx turbo build
-pnpm exec turbo build
+```bash
+curl -X POST http://localhost:3000/api/doors \
+  -H "content-type: application/json" \
+  -d '{"name":"the door at the back of the laundromat"}'
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## Run it in production (one-time setup)
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+1. Push the repo to GitHub.
+2. In Vercel, **New Project** → import the repo. Set **Root Directory** to `apps/web`. Vercel will detect the Turborepo automatically.
+3. Set the **Build Command** to `pnpm vercel-build` (this runs `drizzle-kit migrate` before `next build`).
+4. Add the **Neon integration** from the Vercel marketplace → this wires `DATABASE_URL` for production, preview, and development environments automatically.
+5. Push to `main` → production deploy. Open a PR → preview deploy with its own URL pointed at the Neon dev branch.
 
-```sh
-turbo build --filter=docs
+## Common commands
+
+```bash
+pnpm dev                                    # run the app
+pnpm build                                  # build everything
+pnpm lint                                   # lint everything
+pnpm check-types                            # typecheck everything
+pnpm format                                 # prettier write
+pnpm --filter @repo/db db:push              # sync schema to current DATABASE_URL (no migration files)
+pnpm --filter @repo/db db:generate          # generate a migration from schema changes
+pnpm --filter @repo/db db:migrate           # apply pending migrations
+pnpm --filter @repo/db db:studio            # open Drizzle Studio
+pnpm dlx shadcn@latest add <component>      # add a shadcn component (writes to apps/web)
 ```
 
-Without global `turbo`:
+## Where things live
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+- New page or route → `apps/web/app/...`
+- New DB table → `packages/db/src/schema.ts` (+ Zod schemas in `src/zod.ts`)
+- New UI component → `apps/web/components/ui/...` (via shadcn) or `apps/web/components/...`
+- Image upload (when it lands) → see `apps/web/CLAUDE.md` and `packages/db/CLAUDE.md`
 
-### Develop
-
-To develop all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo dev
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+Each `app` and `package` has its own `CLAUDE.md` with package-specific guidance.
