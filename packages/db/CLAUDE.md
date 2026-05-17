@@ -37,9 +37,11 @@ pnpm --filter @repo/db db:migrate
 3. Re-export the inferred types from `src/index.ts` if they need to be reachable via `@repo/db` (the convenience entrypoint).
 4. `pnpm --filter @repo/db db:push` to sync your local dev branch, then `db:generate` once it's ready to ship.
 
-## Future: image storage
+## Image storage (current shape)
 
-When doors get images, do **not** add an `image_url` column to `doors`. Add a sibling table:
+Single optional `image_url` column on `doors`. Holds a Vercel Blob URL once upload lands. One door, one photo.
+
+**If we ever want multiple images per door**, migrate to a sibling table:
 
 ```ts
 export const doorImages = pgTable("door_images", {
@@ -52,7 +54,34 @@ export const doorImages = pgTable("door_images", {
 });
 ```
 
-This makes multi-image-per-door the default and matches how Vercel Blob URLs are consumed.
+Migration plan: create `door_images`, backfill `INSERT INTO door_images (door_id, blob_url) SELECT id, image_url FROM doors WHERE image_url IS NOT NULL`, drop `doors.image_url`. Mechanical.
+
+## Geo queries
+
+`latitude` / `longitude` are `doublePrecision` columns indexed by a compound btree (`doors_location_idx`). This is sized for **bounding-box queries** — map viewport, "show me doors between these two corners":
+
+```ts
+db.select().from(doors).where(
+  and(
+    between(doors.latitude, swLat, neLat),
+    between(doors.longitude, swLng, neLng),
+  ),
+);
+```
+
+The compound btree handles this efficiently because Postgres can use it for range scans on the leading column (`latitude`).
+
+**Upgrade path to PostGIS** (do this when you need real "nearest N doors" / "within X meters" queries):
+1. `CREATE EXTENSION IF NOT EXISTS postgis;` — one-time on each Neon branch.
+2. Add a generated column to `doors`:
+   ```sql
+   ALTER TABLE doors ADD COLUMN geom geography(Point, 4326)
+     GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(longitude, latitude), 4326)) STORED;
+   ```
+3. `CREATE INDEX doors_geom_idx ON doors USING GIST (geom);`
+4. Add a drizzle `customType` for the geography column so the ORM knows about it, and switch queries to `ST_DWithin(doors.geom, ST_MakePoint($lng, $lat)::geography, $meters)`.
+
+Why we didn't start with PostGIS: drizzle's PostGIS story requires a small `customType` and SQL fragments in queries, and `ST_DWithin` is overkill for v1 map-view rendering. Bounding boxes get you most of the way and we can layer in proper distance ranking later.
 
 ## Why `@neondatabase/serverless` everywhere
 

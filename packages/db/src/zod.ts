@@ -5,7 +5,11 @@ import { doors } from "./schema";
 export const doorSelectSchema = createSelectSchema(doors);
 
 export const doorInsertSchema = createInsertSchema(doors, {
-  name: (s) => s.name.min(1).max(200),
+  title: (s) => s.title.min(1).max(200),
+  description: z.string().max(2000).nullish(),
+  imageUrl: z.string().url().nullish(),
+  latitude: (s) => s.latitude.min(-90).max(90),
+  longitude: (s) => s.longitude.min(-180).max(180),
 }).omit({ id: true });
 
 export type DoorInsert = z.infer<typeof doorInsertSchema>;
