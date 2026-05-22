@@ -32,21 +32,63 @@ export function DoorMap() {
   const mapStyle =
     resolvedTheme === "light" ? "/map-style-light.json" : "/map-style-dark.json";
 
+  // Two-stage view recenter, both popup-free:
+  //   1. IP geolocation via /api/geo (Vercel edge headers) gives a coarse
+  //      regional center on first paint.
+  //   2. If the user has already granted geolocation permission, silently
+  //      upgrade to precise GPS. We gate on Permissions API state === "granted"
+  //      so this never triggers the prompt — `prompt`/`denied` stay on IP geo
+  //      and the form is the only place that ever asks.
   useEffect(() => {
-    if (!("geolocation" in navigator)) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setView({
-          longitude: pos.coords.longitude,
-          latitude: pos.coords.latitude,
-          zoom: 14,
+    let cancelled = false;
+
+    fetch("/api/geo")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (typeof data.lat === "number" && typeof data.lng === "number") {
+          setView({
+            longitude: data.lng,
+            latitude: data.lat,
+            zoom: 12,
+          });
+        }
+      })
+      .catch(() => {
+        /* swallow — fall back to FALLBACK_VIEW */
+      });
+
+    if (
+      "geolocation" in navigator &&
+      navigator.permissions?.query
+    ) {
+      navigator.permissions
+        .query({ name: "geolocation" })
+        .then((result) => {
+          if (cancelled || result.state !== "granted") return;
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              if (cancelled) return;
+              setView({
+                longitude: pos.coords.longitude,
+                latitude: pos.coords.latitude,
+                zoom: 14,
+              });
+            },
+            () => {
+              /* swallow — keep whichever view we already have */
+            },
+            { enableHighAccuracy: false, timeout: 5000 },
+          );
+        })
+        .catch(() => {
+          /* permissions API failed — leave the IP-geo view in place */
         });
-      },
-      () => {
-        /* permission denied or timeout — keep fallback */
-      },
-      { enableHighAccuracy: false, timeout: 5000 },
-    );
+    }
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -61,7 +103,7 @@ export function DoorMap() {
       }
       mapStyle={mapStyle}
       style={{ position: "fixed", inset: 0 }}
-      attributionControl={{ compact: true }}
+      attributionControl={false}
     >
       {SAMPLE_DOORS.map((door) => (
         <Marker

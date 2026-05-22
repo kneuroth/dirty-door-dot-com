@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { cleanlinessValues, type Cleanliness } from "@repo/db";
 
@@ -16,6 +16,12 @@ type Props = {
 };
 
 type FieldStatus = "incomplete" | "valid" | "invalid";
+type PermissionState =
+  | "checking"
+  | "granted"
+  | "prompt"
+  | "denied"
+  | "unsupported";
 
 const SERIF = "Times, 'Times New Roman', Georgia, serif";
 
@@ -27,25 +33,75 @@ export function DoorReportForm({ open, onClose }: Props) {
     null,
   );
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [permissionState, setPermissionState] =
+    useState<PermissionState>("checking");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Capture geolocation when the form opens. Reset on close.
+  // Fires a one-shot GPS lookup. Triggers the native prompt if the user hasn't
+  // decided yet, and translates the various failure modes into a single state
+  // machine the JSX below can branch on.
+  const requestLocation = useCallback(() => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setPermissionState("granted");
+        setLocationError(null);
+      },
+      (err) => {
+        if (err.code === err.PERMISSION_DENIED) {
+          setPermissionState("denied");
+          setLocationError(null);
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setLocationError("Position unavailable. Try again.");
+        } else if (err.code === err.TIMEOUT) {
+          setLocationError("Location request timed out.");
+        } else {
+          setLocationError("Could not get location.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }, []);
+
+  // On form open: inspect the permission state and either auto-fetch (granted)
+  // or wait for the user to press the "Allow Location" button (prompt) /
+  // surface settings instructions (denied). The Permissions API gate is what
+  // lets us avoid showing the popup unsolicited every single time the form
+  // opens.
   useEffect(() => {
     if (!open) return;
     setLocation(null);
     setLocationError(null);
+
     if (!("geolocation" in navigator)) {
-      setLocationError("GEOLOCATION UNAVAILABLE");
+      setPermissionState("unsupported");
       return;
     }
-    navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => setLocationError("PERMISSION DENIED"),
-      { enableHighAccuracy: false, timeout: 8000 },
-    );
-  }, [open]);
+    if (!navigator.permissions?.query) {
+      // Older browsers (older Safari) — skip the inspection and let the user
+      // tap the button to trigger the native prompt directly.
+      setPermissionState("prompt");
+      return;
+    }
+
+    setPermissionState("checking");
+    navigator.permissions
+      .query({ name: "geolocation" })
+      .then((result) => {
+        if (result.state === "granted") {
+          setPermissionState("granted");
+          requestLocation();
+        } else if (result.state === "denied") {
+          setPermissionState("denied");
+        } else {
+          setPermissionState("prompt");
+        }
+      })
+      .catch(() => {
+        setPermissionState("prompt");
+      });
+  }, [open, requestLocation]);
 
   // Esc closes
   useEffect(() => {
@@ -78,7 +134,9 @@ export function DoorReportForm({ open, onClose }: Props) {
 
   const locationStatus: FieldStatus = location
     ? "valid"
-    : locationError
+    : permissionState === "denied" ||
+        permissionState === "unsupported" ||
+        locationError
       ? "invalid"
       : "incomplete";
 
@@ -159,7 +217,8 @@ export function DoorReportForm({ open, onClose }: Props) {
           {/* Scrolling form body */}
           <form
             onSubmit={handleSubmit}
-            className="flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5"
+            className="flex-1 overflow-y-auto px-5 py-4 [&::-webkit-scrollbar]:hidden sm:px-6 sm:py-5"
+            style={{ scrollbarWidth: "none" }}
           >
             <header className="mb-3">
               <h2 className="text-xl font-bold uppercase tracking-wide sm:text-2xl">
@@ -183,6 +242,7 @@ export function DoorReportForm({ open, onClose }: Props) {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 className="mt-1 w-full bg-transparent py-1 outline-none"
+                autoFocus
               />
               {titleStatus === "invalid" && (
                 <p className="mt-1 text-xs font-bold uppercase text-red-700">
@@ -269,8 +329,36 @@ export function DoorReportForm({ open, onClose }: Props) {
                   </div>
                 </>
               )}
-              {!location && !locationError && (
+              {!location && permissionState === "checking" && (
+                <p className="mt-1 text-sm italic">Checking permissions...</p>
+              )}
+              {!location && permissionState === "granted" && !locationError && (
                 <p className="mt-1 text-sm italic">Awaiting GPS lock...</p>
+              )}
+              {!location && permissionState === "prompt" && (
+                <>
+                  <p className="mt-1 text-xs italic">
+                    This report needs your current location.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={requestLocation}
+                    className="mt-2 border-2 border-black bg-white px-3 py-1 text-sm font-bold uppercase"
+                  >
+                    Allow Location
+                  </button>
+                </>
+              )}
+              {!location && permissionState === "denied" && (
+                <p className="mt-1 text-xs font-bold uppercase text-red-700">
+                  Location is blocked. Tap the lock icon in your address bar,
+                  allow location for this site, then reopen this form.
+                </p>
+              )}
+              {!location && permissionState === "unsupported" && (
+                <p className="mt-1 text-xs font-bold uppercase text-red-700">
+                  Geolocation unavailable on this device.
+                </p>
               )}
               {locationError && (
                 <p className="mt-1 text-sm font-bold uppercase text-red-700">
@@ -305,8 +393,8 @@ export function DoorReportForm({ open, onClose }: Props) {
           </form>
 
           {/* Sticky status panel */}
-          <aside className="flex w-[56px] shrink-0 flex-col border-l-2 border-black bg-white p-2 sm:w-[124px] sm:p-3">
-            <p className="mb-2 hidden text-[10px] font-bold uppercase tracking-widest sm:block">
+          <aside className="flex w-[96px] shrink-0 flex-col bg-white p-2 sm:w-[124px] sm:p-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-widest">
               Status
             </p>
             <StatusRow label="Title" status={titleStatus} />
@@ -333,7 +421,7 @@ export function DoorReportForm({ open, onClose }: Props) {
 function StatusRow({ label, status }: { label: string; status: FieldStatus }) {
   return (
     <div className="flex items-center justify-between gap-1 py-1 text-[11px] uppercase">
-      <span className="hidden sm:inline">{label}</span>
+      <span>{label}</span>
       <StatusMarker status={status} />
     </div>
   );
@@ -350,7 +438,7 @@ function StatusMarker({ status }: { status: FieldStatus }) {
   return (
     <span
       aria-label={status}
-      className={`mx-auto inline-flex size-[18px] items-center justify-center border-[1.5px] bg-white text-[12px] font-bold leading-none sm:mx-0 ${colorClass}`}
+      className={`inline-flex size-[18px] items-center justify-center border-[1.5px] bg-white text-[12px] font-bold leading-none ${colorClass}`}
     >
       {symbol}
     </span>

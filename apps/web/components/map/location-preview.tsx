@@ -15,7 +15,7 @@ type Props = {
  * Always uses the light style so it matches the form's paper aesthetic
  * regardless of the app's theme toggle.
  */
-export function LocationPreview({ latitude, longitude, zoom = 15 }: Props) {
+export function LocationPreview({ latitude, longitude, zoom = 16 }: Props) {
   return (
     <div className="relative h-32 w-60 overflow-hidden border-2 border-black">
       <Map
@@ -24,11 +24,7 @@ export function LocationPreview({ latitude, longitude, zoom = 15 }: Props) {
         interactive={false}
         attributionControl={false}
       >
-        <Marker
-          latitude={latitude}
-          longitude={longitude}
-          anchor="center"
-        >
+        <Marker latitude={latitude} longitude={longitude} anchor="center">
           <div className="size-3 rotate-45 border-2 border-black bg-red-700 shadow-[1px_1px_0_0_rgba(0,0,0,0.6)]" />
         </Marker>
       </Map>

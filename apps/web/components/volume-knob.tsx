@@ -1,49 +1,45 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
-const STORAGE_KEY = "dd-radio-volume-level";
 const LEVELS = [0, 0.25, 0.5, 0.75, 1.0] as const;
-const DEFAULT_LEVEL = 2;
+const DEFAULT_LEVEL = 0;
 // rotation degrees per level: spans -135° (off) to +135° (max)
 const ROTATION_PER_LEVEL = 270 / (LEVELS.length - 1);
 
-/**
- * Module-level mirror of the current level, kept in sync with the React state.
- * Allows non-React code (e.g. timers in useEffect) to read the latest value
- * without needing the state in their dep array.
- */
+// Shared store: a single source of truth across every useRadioVolume() caller,
+// so the knob and the page-level audio logic stay in lockstep.
 let currentLevel = DEFAULT_LEVEL;
+const listeners = new Set<() => void>();
+
+function subscribe(fn: () => void) {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+function getSnapshot() {
+  return currentLevel;
+}
+
+function setLevel(next: number) {
+  const clamped = Math.max(0, Math.min(LEVELS.length - 1, next));
+  if (clamped === currentLevel) return;
+  currentLevel = clamped;
+  listeners.forEach((fn) => fn());
+}
 
 export function getRadioVolumeMultiplier(): number {
   return LEVELS[currentLevel] ?? 0;
 }
 
 export function useRadioVolume() {
-  const [level, setLevel] = useState<number>(DEFAULT_LEVEL);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored !== null) {
-      const n = parseInt(stored, 10);
-      if (!isNaN(n) && n >= 0 && n < LEVELS.length) {
-        setLevel(n);
-        currentLevel = n;
-      }
-    }
-  }, []);
-
-  const update = (next: number) => {
-    const clamped = Math.max(0, Math.min(LEVELS.length - 1, next));
-    setLevel(clamped);
-    currentLevel = clamped;
-    localStorage.setItem(STORAGE_KEY, String(clamped));
-  };
-
+  const level = useSyncExternalStore(subscribe, getSnapshot, () => DEFAULT_LEVEL);
   return {
     level,
     multiplier: LEVELS[level] ?? 0,
-    setLevel: update,
+    setLevel,
     maxLevel: LEVELS.length - 1,
   };
 }

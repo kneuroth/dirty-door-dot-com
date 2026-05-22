@@ -7,6 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { RadioDisplay } from "@/components/radio-display";
 import { VolumeKnob, useRadioVolume } from "@/components/volume-knob";
 import { DoorReportForm } from "@/components/door-report-form";
+import { MapAttribution } from "@/components/map/map-attribution";
 import { playRadio, preloadRadio } from "@/lib/sound";
 
 const DoorMap = dynamic(
@@ -14,30 +15,24 @@ const DoorMap = dynamic(
   { ssr: false },
 );
 
-// Played when YOU press "File Door Report" — your own voice clips.
-// Drop new files in apps/web/public/audio/ then add the path here.
-const MY_DISPATCH_LINES: string[] = [
-  "/audio/dont-like-the-look.m4a",
-  "/audio/filing-a-ddr.m4a",
-  "/audio/got-one-dirty-door-here.m4a",
-  "/audio/head-office.m4a",
-  "/audio/no-body-called.m4a",
-  "/audio/reporting-dirty-door.m4a",
-  "/audio/sigh-i-gotta-report.m4a",
-  "/audio/step-back-folks.m4a",
-  "/audio/uh-yeah.m4a",
-  "/audio/we-got-a-dirty-door-here.m4a",
-];
-
 // Played by the auto-dispatcher every 30–60s — background "external call-in" voices.
 // Leave empty to disable auto-dispatch entirely.
-const EXT_DISPATCH_LINES: string[] = [];
+const EXT_DISPATCH_LINES: string[] = [
+  "/audio/code-h.mp4",
+  "/audio/theatre-district.mp4",
+  "/audio/mobil.mp4",
+  "/audio/tims.mp4",
+];
 
 // Auto-dispatch tuning
-const AUTO_DISPATCH_ENABLED = false; // flip to true to enable background EXT calls
+const AUTO_DISPATCH_ENABLED = true; // flip to true to enable background EXT calls
 const AUTO_INTERVAL_MIN_MS = 30_000;
 const AUTO_INTERVAL_MAX_MS = 60_000;
-const AUTO_VOLUME_RATIO = 0.3; // auto-calls play at 30% of the user-press volume
+// Headroom on the knob's max — keeps the file's baked-in effects from clipping
+// against the gain stage at full volume.
+const DISPATCH_VOLUME_RATIO = 0.7;
+// Delay after the user first turns the radio on before the welcome dispatch fires
+const FIRST_ACTIVATION_DELAY_MS = 2_000;
 
 function pickLine(lines: string[]): string | undefined {
   if (lines.length === 0) return undefined;
@@ -52,7 +47,7 @@ export default function Home() {
 
   // Preload every clip so first play has no fetch latency
   useEffect(() => {
-    [...MY_DISPATCH_LINES, ...EXT_DISPATCH_LINES].forEach(preloadRadio);
+    EXT_DISPATCH_LINES.forEach(preloadRadio);
   }, []);
 
   // Auto-dispatcher — random "someone calls in" every 30–60s, pulled from EXT pool
@@ -67,7 +62,7 @@ export default function Home() {
         const line = pickLine(EXT_DISPATCH_LINES);
         if (line && multiplierRef.current > 0) {
           playRadio(line, {
-            volume: multiplierRef.current * AUTO_VOLUME_RATIO,
+            volume: multiplierRef.current * DISPATCH_VOLUME_RATIO,
           });
         }
         schedule();
@@ -77,12 +72,33 @@ export default function Home() {
     return () => clearTimeout(timerId);
   }, []);
 
+  // First time the user turns the radio up from zero, play a welcome dispatch
+  // 2s later — feels like the channel waking up. No cleanup: a subsequent knob
+  // change must not cancel the pending timer.
+  const firstActivationDoneRef = useRef(false);
+  useEffect(() => {
+    if (firstActivationDoneRef.current || multiplier <= 0) return;
+    firstActivationDoneRef.current = true;
+    const line = pickLine(EXT_DISPATCH_LINES);
+    if (!line) return;
+    setTimeout(() => {
+      if (multiplierRef.current > 0) {
+        playRadio(line, {
+          volume: multiplierRef.current * DISPATCH_VOLUME_RATIO,
+        });
+      }
+    }, FIRST_ACTIVATION_DELAY_MS);
+  }, [multiplier]);
+
   return (
     <main className="relative h-dvh w-screen overflow-hidden">
       <DoorMap />
 
       <header className="pointer-events-none absolute inset-x-0 top-0 z-10 px-4 pt-4">
         <div className="relative flex items-center justify-center">
+          <div className="pointer-events-auto absolute left-0">
+            <MapAttribution />
+          </div>
           <h1 className="pointer-events-auto border border-border bg-background/85 px-4 py-1.5 font-stencil text-base font-semibold uppercase tracking-widest shadow-[var(--shadow-panel)] backdrop-blur-md">
             dirtydoor<span className="text-muted-foreground">.com</span>
           </h1>
@@ -100,23 +116,13 @@ export default function Home() {
         <Button
           size="lg"
           className="pointer-events-auto w-full max-w-sm"
-          onPointerDown={(e) => {
-            if (e.pointerType === "mouse" && e.button !== 0) return;
-            if (multiplier > 0) {
-              const line = pickLine(MY_DISPATCH_LINES);
-              if (line) playRadio(line, { volume: multiplier });
-            }
-            setIsFormOpen(true);
-          }}
+          onClick={() => setIsFormOpen(true)}
         >
           File Door Report
         </Button>
       </div>
 
-      <DoorReportForm
-        open={isFormOpen}
-        onClose={() => setIsFormOpen(false)}
-      />
+      <DoorReportForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
     </main>
   );
 }
