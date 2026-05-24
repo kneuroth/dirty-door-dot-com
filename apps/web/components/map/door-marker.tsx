@@ -10,7 +10,7 @@ type Palette = {
 
 type MarkerPalette = Record<Cleanliness, Palette>;
 
-const DEFAULT_PALETTE: MarkerPalette = {
+export const DEFAULT_PALETTE: MarkerPalette = {
   immaculate: {
     body: "#22c55e",
     frame: "#14532d",

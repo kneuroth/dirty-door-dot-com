@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -44,22 +44,6 @@ export default function Home() {
   const multiplierRef = useRef(multiplier);
   multiplierRef.current = multiplier;
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [initialFile, setInitialFile] = useState<File | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleFileReport = useCallback(() => {
-    fileInputRef.current?.click();
-    setIsFormOpen(true);
-  }, []);
-
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0] ?? null;
-      if (file) setInitialFile(file);
-      e.target.value = "";
-    },
-    [],
-  );
 
   // Preload every clip so first play has no fetch latency
   useEffect(() => {
@@ -132,28 +116,13 @@ export default function Home() {
         <Button
           size="lg"
           className="pointer-events-auto w-full max-w-sm"
-          onClick={handleFileReport}
+          onClick={() => setIsFormOpen(true)}
         >
           File Door Report
         </Button>
       </div>
 
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="sr-only"
-        onChange={handleFileChange}
-      />
-      <DoorReportForm
-        open={isFormOpen}
-        onClose={() => {
-          setIsFormOpen(false);
-          setInitialFile(null);
-        }}
-        initialFile={initialFile}
-      />
+      <DoorReportForm open={isFormOpen} onClose={() => setIsFormOpen(false)} />
     </main>
   );
 }

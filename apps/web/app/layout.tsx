@@ -49,7 +49,7 @@ export default function RootLayout({
       className={`${stencil.variable} ${body.variable}`}
       suppressHydrationWarning
     >
-      <body>
+      <body suppressHydrationWarning>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

@@ -8,6 +8,7 @@ const MAX_RESULTS = 200;
 export type MapDoor = {
   id: string;
   title: string;
+  description: string | null;
   cleanliness: string;
   latitude: number;
   longitude: number;
@@ -18,6 +19,7 @@ export async function findDoorsInBounds(bounds: DoorBounds): Promise<MapDoor[]> 
     .select({
       id: doors.id,
       title: doors.title,
+      description: doors.description,
       cleanliness: doors.cleanliness,
       latitude: doors.latitude,
       longitude: doors.longitude,
