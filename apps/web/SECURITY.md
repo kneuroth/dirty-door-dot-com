@@ -18,6 +18,7 @@ _Last updated: 2026-05-17_
 | XSS at render | React default escaping. No `dangerouslySetInnerHTML` anywhere in the app — keep it that way unless absolutely necessary, and sanitize at that point. |
 | Secret exposure | `.env*` gitignored; `DATABASE_URL` is server-only; map style JSON is public but contains no secrets |
 | Cross-origin browser requests | Next.js routes are same-origin by default |
+| Image upload on `POST /api/upload/door-image` | Server-side content-type allowlist (JPEG/PNG/WebP only), 10 MB size cap via `onBeforeGenerateToken`. Client-side pre-validation mirrors server rules. Signed upload tokens — bytes go directly to Vercel Blob, never through our server. |
 
 ### What is NOT protected today
 
@@ -108,5 +109,6 @@ Where it'll live: `apps/web/app/api/upload/door-image/route.ts` per `apps/web/CL
 
 Most-recent-first.
 
+- **2026-05-24** — Image upload shipped. `POST /api/upload/door-image` uses Vercel Blob signed tokens with server-side content-type allowlist (JPEG/PNG/WebP) and 10 MB cap. Client pre-validates type and size. Image bytes never touch our server. Content moderation still absent — noted in future work.
 - **2026-05-24** — `GET /api/doors` shipped (MVP). Bounding-box query with `doorBoundsSchema` validation, 2° lat-span cap, 200-row limit, column-restricted response (id/title/cleanliness/lat/lng only). Client uses `AbortController` to cancel stale viewport fetches. Updated "Door list" section from future-work to shipped.
 - **2026-05-17** — Initial tracker created. Audited current state: input validation via Zod is solid; everything around abuse (rate limiting, auth, captcha, logging) is missing. Documented pre-launch checklist (4 items, ~30 min total work) and prioritized future work. No code changes yet — this doc is the baseline to track against.

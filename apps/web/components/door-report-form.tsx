@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { cleanlinessValues, type Cleanliness } from "@repo/db";
+import { usePhotoUpload } from "@/hooks/use-photo-upload";
 
 const LocationPreview = dynamic(
   () =>
@@ -13,6 +14,7 @@ const LocationPreview = dynamic(
 type Props = {
   open: boolean;
   onClose: () => void;
+  initialFile?: File | null;
 };
 
 type FieldStatus = "incomplete" | "valid" | "invalid";
@@ -25,8 +27,10 @@ type PermissionState =
 
 const SERIF = "Times, 'Times New Roman', Georgia, serif";
 
-export function DoorReportForm({ open, onClose }: Props) {
+export function DoorReportForm({ open, onClose, initialFile }: Props) {
   const [title, setTitle] = useState("");
+  const photo = usePhotoUpload();
+  const photoInputRef = useRef<HTMLInputElement>(null);
   const [description, setDescription] = useState("");
   const [cleanliness, setCleanliness] = useState<Cleanliness>("smudged up");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
@@ -38,6 +42,7 @@ export function DoorReportForm({ open, onClose }: Props) {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [locationKey, setLocationKey] = useState(0);
+  const [locationAdjusted, setLocationAdjusted] = useState(false);
 
   // Fires a one-shot GPS lookup. Triggers the native prompt if the user hasn't
   // decided yet, and translates the various failure modes into a single state
@@ -47,6 +52,7 @@ export function DoorReportForm({ open, onClose }: Props) {
       (pos) => {
         setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setLocationKey((k) => k + 1);
+        setLocationAdjusted(false);
         setPermissionState("granted");
         setLocationError(null);
       },
@@ -105,6 +111,10 @@ export function DoorReportForm({ open, onClose }: Props) {
       });
   }, [open, requestLocation]);
 
+  useEffect(() => {
+    if (initialFile) photo.handleFile(initialFile);
+  }, [initialFile]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Esc closes
   useEffect(() => {
     if (!open) return;
@@ -141,11 +151,14 @@ export function DoorReportForm({ open, onClose }: Props) {
       ? "invalid"
       : "incomplete";
 
+  const photoStatus = photo.photoStatus;
+
   const canSubmit =
     titleStatus === "valid" &&
     descriptionStatus !== "invalid" &&
     cleanlinessStatus === "valid" &&
     locationStatus === "valid" &&
+    photoStatus === "valid" &&
     !submitting;
 
   const reset = () => {
@@ -153,6 +166,7 @@ export function DoorReportForm({ open, onClose }: Props) {
     setDescription("");
     setCleanliness("smudged up");
     setSubmitError(null);
+    photo.reset();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,6 +184,7 @@ export function DoorReportForm({ open, onClose }: Props) {
           cleanliness,
           latitude: location.lat,
           longitude: location.lng,
+          imageUrl: photo.blobUrl,
         }),
       });
       if (!res.ok) {
@@ -305,8 +320,10 @@ export function DoorReportForm({ open, onClose }: Props) {
             {/* Location */}
             <section className="py-3">
               <p className="text-sm font-bold uppercase">
-                4. Location{" "}
-                <span className="font-normal italic">(auto-captured)</span>
+                4. Location
+                {!locationAdjusted && (
+                  <span className="font-normal italic"> (auto-captured)</span>
+                )}
               </p>
               {location && (
                 <>
@@ -320,14 +337,16 @@ export function DoorReportForm({ open, onClose }: Props) {
                       latitude={location.lat}
                       longitude={location.lng}
                       cleanliness={cleanliness}
-                      onLocationChange={(lat, lng) =>
-                        setLocation({ lat, lng })
-                      }
+                      onLocationChange={(lat, lng) => {
+                        setLocation({ lat, lng });
+                        setLocationAdjusted(true);
+                      }}
                     />
                     <button
                       type="button"
+                      disabled={!locationAdjusted}
                       onClick={requestLocation}
-                      className="mt-2 w-full border-2 border-black bg-white px-3 py-0.5 text-xs font-bold uppercase"
+                      className="mt-2 w-full border-2 border-black bg-white px-3 py-0.5 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Reset to Current
                     </button>
@@ -406,40 +425,68 @@ export function DoorReportForm({ open, onClose }: Props) {
             <StatusRow label="Desc" status={descriptionStatus} />
             <StatusRow label="Clean" status={cleanlinessStatus} />
             <StatusRow label="Loc" status={locationStatus} />
+            <StatusRow label="Photo" status={photoStatus} />
           </aside>
 
-          {/* Polaroid photo placeholder — will open camera / upload flow when wired up. */}
+          {/* Polaroid — click to capture/upload photo */}
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              if (file) photo.handleFile(file);
+              e.target.value = "";
+            }}
+          />
           <button
             type="button"
-            aria-label="Attach photo (coming soon)"
-            className="absolute bottom-[6%] right-[-14px] z-20 flex w-[120px] rotate-3 cursor-pointer flex-col items-center border border-neutral-200 bg-white p-2 pb-5 shadow-[3px_3px_0_0_rgba(0,0,0,0.25)] outline-none transition-transform hover:rotate-0 focus-visible:outline-2 focus-visible:outline-black sm:w-[148px] sm:p-2.5 sm:pb-6"
+            aria-label="Attach photo evidence"
+            onClick={() => photoInputRef.current?.click()}
+            className={`absolute bottom-[6%] right-[-14px] z-20 flex w-[120px] rotate-3 cursor-pointer flex-col items-center border bg-white p-2 pb-5 shadow-[3px_3px_0_0_rgba(0,0,0,0.25)] outline-none transition-transform hover:rotate-0 focus-visible:outline-2 focus-visible:outline-black sm:w-[148px] sm:p-2.5 sm:pb-6 ${photo.error ? "border-red-400" : "border-neutral-200"}`}
           >
-            <div className="flex aspect-square w-full items-center justify-center bg-[#1a1a1a]">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.5}
-                className="size-8 text-neutral-500 sm:size-10"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+            <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden bg-[#1a1a1a]">
+              {photo.previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={photo.previewUrl}
+                  alt="Evidence preview"
+                  className="size-full object-cover"
                 />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
-                />
-              </svg>
+              ) : (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.5}
+                  className="size-8 text-neutral-500 sm:size-10"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
+                  />
+                </svg>
+              )}
+              {photo.uploading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <div className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                </div>
+              )}
             </div>
             <span
-              className="mt-1.5 text-[9px] font-bold uppercase tracking-wide text-neutral-500 sm:mt-2 sm:text-[10px]"
+              className={`mt-1.5 text-[9px] font-bold uppercase tracking-wide sm:mt-2 sm:text-[10px] ${photo.error ? "text-red-600" : "text-neutral-500"}`}
               style={{ fontFamily: SERIF }}
             >
-              Attach Photo
+              {photo.error ? "Retry" : "Evidence"}
             </span>
           </button>
         </div>

@@ -8,6 +8,14 @@ const nextConfig = {
   // and crashes with `TypeError: The "path" argument must be of type string.
   // Received undefined`.
   outputFileTracingRoot: path.join(import.meta.dirname, "../.."),
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "*.public.blob.vercel-storage.com",
+      },
+    ],
+  },
 };
 
 export default nextConfig;
