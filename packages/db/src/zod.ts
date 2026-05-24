@@ -12,5 +12,13 @@ export const doorInsertSchema = createInsertSchema(doors, {
   longitude: (s) => s.longitude.min(-180).max(180),
 }).omit({ id: true });
 
+export const doorBoundsSchema = z.object({
+  swLat: z.coerce.number().min(-90).max(90),
+  swLng: z.coerce.number().min(-180).max(180),
+  neLat: z.coerce.number().min(-90).max(90),
+  neLng: z.coerce.number().min(-180).max(180),
+});
+
 export type DoorInsert = z.infer<typeof doorInsertSchema>;
 export type DoorSelect = z.infer<typeof doorSelectSchema>;
+export type DoorBounds = z.infer<typeof doorBoundsSchema>;

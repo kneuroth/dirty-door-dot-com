@@ -28,7 +28,7 @@ const SERIF = "Times, 'Times New Roman', Georgia, serif";
 export function DoorReportForm({ open, onClose }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [cleanliness, setCleanliness] = useState<Cleanliness | null>(null);
+  const [cleanliness, setCleanliness] = useState<Cleanliness>("smudged up");
   const [location, setLocation] = useState<{ lat: number; lng: number } | null>(
     null,
   );
@@ -37,6 +37,7 @@ export function DoorReportForm({ open, onClose }: Props) {
     useState<PermissionState>("checking");
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [locationKey, setLocationKey] = useState(0);
 
   // Fires a one-shot GPS lookup. Triggers the native prompt if the user hasn't
   // decided yet, and translates the various failure modes into a single state
@@ -45,6 +46,7 @@ export function DoorReportForm({ open, onClose }: Props) {
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationKey((k) => k + 1);
         setPermissionState("granted");
         setLocationError(null);
       },
@@ -129,8 +131,7 @@ export function DoorReportForm({ open, onClose }: Props) {
         ? "invalid"
         : "valid";
 
-  const cleanlinessStatus: FieldStatus =
-    cleanliness === null ? "incomplete" : "valid";
+  const cleanlinessStatus: FieldStatus = "valid";
 
   const locationStatus: FieldStatus = location
     ? "valid"
@@ -150,13 +151,13 @@ export function DoorReportForm({ open, onClose }: Props) {
   const reset = () => {
     setTitle("");
     setDescription("");
-    setCleanliness(null);
+    setCleanliness("smudged up");
     setSubmitError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit || !location || !cleanliness) return;
+    if (!canSubmit || !location) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -315,16 +316,20 @@ export function DoorReportForm({ open, onClose }: Props) {
                   </div>
                   <div className="mt-2 max-w-60">
                     <LocationPreview
+                      key={locationKey}
                       latitude={location.lat}
                       longitude={location.lng}
+                      cleanliness={cleanliness}
+                      onLocationChange={(lat, lng) =>
+                        setLocation({ lat, lng })
+                      }
                     />
-                    {/* Placeholder for future "select a different location" flow. Disabled for now. */}
                     <button
                       type="button"
-                      disabled
-                      className="mt-2 w-full border-2 border-black bg-white px-3 py-0.5 text-xs font-bold uppercase disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={requestLocation}
+                      className="mt-2 w-full border-2 border-black bg-white px-3 py-0.5 text-xs font-bold uppercase"
                     >
-                      Change Location
+                      Reset to Current
                     </button>
                   </div>
                 </>
