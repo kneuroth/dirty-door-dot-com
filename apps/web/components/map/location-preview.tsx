@@ -17,7 +17,7 @@ type Props = {
  */
 export function LocationPreview({ latitude, longitude, zoom = 16 }: Props) {
   return (
-    <div className="relative h-32 w-60 overflow-hidden border-2 border-black">
+    <div className="relative h-32 w-full max-w-60 overflow-hidden border-2 border-black">
       <Map
         initialViewState={{ latitude, longitude, zoom }}
         mapStyle="/map-style-light.json"

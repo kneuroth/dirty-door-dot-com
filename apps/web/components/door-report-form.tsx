@@ -309,11 +309,11 @@ export function DoorReportForm({ open, onClose }: Props) {
               </p>
               {location && (
                 <>
-                  <p className="mt-1 font-mono text-sm">
-                    LAT {location.lat.toFixed(5)} &nbsp;&nbsp; LNG{" "}
-                    {location.lng.toFixed(5)}
-                  </p>
-                  <div className="mt-2 inline-block">
+                  <div className="mt-1 flex flex-col gap-0.5 font-mono text-sm sm:flex-row sm:gap-4">
+                    <span>LAT {location.lat.toFixed(5)}</span>
+                    <span>LNG {location.lng.toFixed(5)}</span>
+                  </div>
+                  <div className="mt-2 max-w-60">
                     <LocationPreview
                       latitude={location.lat}
                       longitude={location.lng}
@@ -403,15 +403,40 @@ export function DoorReportForm({ open, onClose }: Props) {
             <StatusRow label="Loc" status={locationStatus} />
           </aside>
 
-          {/* Sticky-note photo placeholder.
-            Stuck to the paper, not part of the scrollable form. Hangs off the right edge.
-            Currently a no-op button — will eventually open the camera / upload flow.
-            Replace with an <img> here when wired up; same position/rotation/shadow. */}
+          {/* Polaroid photo placeholder — will open camera / upload flow when wired up. */}
           <button
             type="button"
             aria-label="Attach photo (coming soon)"
-            className="absolute bottom-[18%] right-[-14px] z-20 size-32 rotate-3 cursor-pointer bg-[#fdf08a] shadow-[3px_3px_0_0_rgba(0,0,0,0.25)] outline-none transition-transform hover:rotate-0 focus-visible:outline-2 focus-visible:outline-black sm:size-40"
-          />
+            className="absolute bottom-[6%] right-[-14px] z-20 flex w-[120px] rotate-3 cursor-pointer flex-col items-center border border-neutral-200 bg-white p-2 pb-5 shadow-[3px_3px_0_0_rgba(0,0,0,0.25)] outline-none transition-transform hover:rotate-0 focus-visible:outline-2 focus-visible:outline-black sm:w-[148px] sm:p-2.5 sm:pb-6"
+          >
+            <div className="flex aspect-square w-full items-center justify-center bg-[#1a1a1a]">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.5}
+                className="size-8 text-neutral-500 sm:size-10"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"
+                />
+              </svg>
+            </div>
+            <span
+              className="mt-1.5 text-[9px] font-bold uppercase tracking-wide text-neutral-500 sm:mt-2 sm:text-[10px]"
+              style={{ fontFamily: SERIF }}
+            >
+              Attach Photo
+            </span>
+          </button>
         </div>
       </div>
     </div>
